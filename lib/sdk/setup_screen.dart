@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:xterm/xterm.dart';
 import '../core/proot_service.dart';
 import '../core/shell_service.dart';
@@ -48,7 +50,7 @@ class _SetupScreenState extends State<SetupScreen> {
       await widget.proot.ensureRootfs(
         onProgress: (progress, message) {
           setState(() {
-            _progress = progress * 0.3; // Rootfs is 30% of total
+            _progress = progress * 0.3;
             _currentStep = message;
           });
         },
@@ -60,7 +62,12 @@ class _SetupScreenState extends State<SetupScreen> {
       });
       _terminal.write('\r\n[ROOTFS] Debian rootfs downloaded and extracted\r\n');
 
-      // Step 2: Run setup.sh inside proot
+      // Step 2: Copy setup.sh from assets into rootfs
+      final scriptContent = await rootBundle.loadString('assets/setup.sh');
+      final scriptFile = File('${widget.proot.rootfsDir}/tmp/setup.sh');
+      await scriptFile.writeAsString(scriptContent);
+
+      // Step 3: Run setup.sh inside proot
       _outputSubscription = widget.shell.output.listen(
         (data) {
           _terminal.write(data);
@@ -69,7 +76,7 @@ class _SetupScreenState extends State<SetupScreen> {
       );
 
       await widget.shell.startShell();
-      await widget.shell.writeInput('bash /assets/setup.sh');
+      await widget.shell.writeInput('sh /tmp/setup.sh\n');
     } catch (e) {
       setState(() {
         _currentStep = 'Error: $e';

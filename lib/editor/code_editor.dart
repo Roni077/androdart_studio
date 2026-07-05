@@ -21,25 +21,35 @@ class CodeEditorWidget extends StatefulWidget {
 
 class _CodeEditorWidgetState extends State<CodeEditorWidget> {
   late CodeLineEditingController _controller;
+  bool _isUpdatingFromParent = false;
 
   @override
   void initState() {
     super.initState();
     _controller = CodeLineEditingController.fromText(widget.content);
+    _controller.addListener(_onTextChanged);
   }
 
   @override
   void didUpdateWidget(CodeEditorWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.content != widget.content) {
+      _isUpdatingFromParent = true;
       _controller.text = widget.content;
+      _isUpdatingFromParent = false;
     }
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_onTextChanged);
     _controller.dispose();
     super.dispose();
+  }
+
+  void _onTextChanged() {
+    if (_isUpdatingFromParent) return;
+    widget.onChanged?.call(_controller.text);
   }
 
   @override

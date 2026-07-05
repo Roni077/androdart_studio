@@ -57,7 +57,7 @@ class ShellService {
     final mergedEnv = {...defaultEnv, ...env};
 
     final prootCmd = _proot.buildProotCommand(
-      command: '/bin/bash --login',
+      command: 'exec /bin/sh --login',
       env: mergedEnv,
       workingDir: workingDir ?? _proot.rootfsHome,
     );

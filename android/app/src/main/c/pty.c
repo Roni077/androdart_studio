@@ -17,7 +17,7 @@ typedef struct {
     pid_t child_pid;
     int is_running;
     pthread_t read_thread;
-    int session_id;
+    long session_id;
 } pty_session_t;
 
 static JavaVM *g_jvm = NULL;
@@ -43,7 +43,7 @@ static void *read_thread_func(void *arg) {
             buf[n] = '\0';
             jstring jstr = (*env)->NewStringUTF(env, buf);
             (*env)->CallVoidMethod(env, rarg->callback, rarg->on_output_method,
-                                   (jint)session->session_id, jstr);
+                                   (jlong)session->session_id, jstr);
             (*env)->DeleteLocalRef(env, jstr);
         } else if (n == 0) {
             break;
@@ -62,16 +62,17 @@ static void *read_thread_func(void *arg) {
         exit_code = WEXITSTATUS(status);
     }
     (*env)->CallVoidMethod(env, rarg->callback, rarg->on_exit_method,
-                           (jint)session->session_id, exit_code);
+                           (jlong)session->session_id, exit_code);
+
+    (*env)->DeleteGlobalRef(env, rarg->callback);
 
     (*g_jvm)->DetachCurrentThread(g_jvm);
 
-    (*env)->DeleteGlobalRef(env, rarg->callback);
     free(rarg);
     return NULL;
 }
 
-JNIEXPORT jint JNICALL
+JNIEXPORT jlong JNICALL
 Java_com_androdartstudio_flutteride_androdart_1studio_MainActivity_nativeCreatePty(
     JNIEnv *env,
     jobject thiz,
@@ -84,8 +85,8 @@ Java_com_androdartstudio_flutteride_androdart_1studio_MainActivity_nativeCreateP
     (*env)->GetJavaVM(env, &g_jvm);
 
     jclass cb_class = (*env)->GetObjectClass(env, callback);
-    jmethodID on_output = (*env)->GetMethodID(env, cb_class, "onOutput", "(ILjava/lang/String;)V");
-    jmethodID on_exit = (*env)->GetMethodID(env, cb_class, "onExit", "(II)V");
+    jmethodID on_output = (*env)->GetMethodID(env, cb_class, "onOutput", "(JLjava/lang/String;)V");
+    jmethodID on_exit = (*env)->GetMethodID(env, cb_class, "onExit", "(JI)V");
 
     int master_fd;
     int slave_fd;
@@ -94,9 +95,6 @@ Java_com_androdartstudio_flutteride_androdart_1studio_MainActivity_nativeCreateP
     if (openpty(&master_fd, &slave_fd, NULL, NULL, &ws) == -1) {
         return -1;
     }
-
-    int flags = fcntl(master_fd, F_GETFL, 0);
-    fcntl(master_fd, F_SETFL, flags | O_NONBLOCK);
 
     pid_t pid = fork();
     if (pid < 0) {
@@ -152,7 +150,15 @@ Java_com_androdartstudio_flutteride_androdart_1studio_MainActivity_nativeCreateP
         argv[argc + 1] = NULL;
 
         execvp(cmd, argv);
-        // If execvp fails, write error to stderr and exit
+
+        for (int i = 1; i <= argc; i++) {
+            if (argv[i] != NULL) {
+                (*env)->ReleaseStringUTFChars(env, (jstring)(*env)->GetObjectArrayElement(env, args, i - 1), argv[i]);
+            }
+        }
+        (*env)->ReleaseStringUTFChars(env, command, cmd);
+        free(argv);
+
         const char *err_msg = "execvp failed: command not found or permission denied\n";
         write(STDERR_FILENO, err_msg, strlen(err_msg));
         _exit(127);
@@ -164,7 +170,7 @@ Java_com_androdartstudio_flutteride_androdart_1studio_MainActivity_nativeCreateP
     session->master_fd = master_fd;
     session->child_pid = pid;
     session->is_running = 1;
-    session->session_id = (int)(intptr_t)session;
+    session->session_id = (long)(intptr_t)session;
 
     read_thread_arg_t *rarg = (read_thread_arg_t *)malloc(sizeof(read_thread_arg_t));
     rarg->session = session;
@@ -173,14 +179,14 @@ Java_com_androdartstudio_flutteride_androdart_1studio_MainActivity_nativeCreateP
     rarg->on_exit_method = on_exit;
     pthread_create(&session->read_thread, NULL, read_thread_func, rarg);
 
-    return (jint)session->session_id;
+    return (jlong)session->session_id;
 }
 
 JNIEXPORT jint JNICALL
 Java_com_androdartstudio_flutteride_androdart_1studio_MainActivity_nativeWritePty(
     JNIEnv *env,
     jobject thiz,
-    jint sessionPtr,
+    jlong sessionPtr,
     jstring input) {
 
     pty_session_t *session = (pty_session_t *)(intptr_t)sessionPtr;
@@ -198,7 +204,7 @@ JNIEXPORT jint JNICALL
 Java_com_androdartstudio_flutteride_androdart_1studio_MainActivity_nativeResizePty(
     JNIEnv *env,
     jobject thiz,
-    jint sessionPtr,
+    jlong sessionPtr,
     jint cols,
     jint rows) {
 
@@ -213,7 +219,7 @@ JNIEXPORT jint JNICALL
 Java_com_androdartstudio_flutteride_androdart_1studio_MainActivity_nativeClosePty(
     JNIEnv *env,
     jobject thiz,
-    jint sessionPtr) {
+    jlong sessionPtr) {
 
     pty_session_t *session = (pty_session_t *)(intptr_t)sessionPtr;
     if (session == NULL) return -1;
@@ -235,17 +241,17 @@ Java_com_androdartstudio_flutteride_androdart_1studio_MainActivity_nativeGetNati
     JNIEnv *env,
     jobject thiz) {
 
-    jclass context_class = (*env)->FindClass(env, "android/content/Context");
-    jmethodID get_files_dir = (*env)->GetMethodID(env, context_class, "getFilesDir", "()Ljava/io/File;");
-    jobject files_dir = (*env)->CallObjectMethod(env, thiz, get_files_dir);
+    jclass activity_class = (*env)->FindClass(env, "android/app/Activity");
+    jmethodID get_app_info = (*env)->GetMethodID(env, activity_class, "getApplicationInfo", "()Landroid/content/pm/ApplicationInfo;");
+    jobject app_info = (*env)->CallObjectMethod(env, thiz, get_app_info);
 
-    jclass file_class = (*env)->FindClass(env, "java/io/File");
-    jmethodID get_path = (*env)->GetMethodID(env, file_class, "getAbsolutePath", "()Ljava/lang/String;");
-    jstring path = (jstring)(*env)->CallObjectMethod(env, files_dir, get_path);
+    jclass app_info_class = (*env)->FindClass(env, "android/content/pm/ApplicationInfo");
+    jfieldID native_lib_dir_field = (*env)->GetFieldID(env, app_info_class, "nativeLibraryDir", "Ljava/lang/String;");
+    jstring native_lib_dir = (jstring)(*env)->GetObjectField(env, app_info, native_lib_dir_field);
 
-    (*env)->DeleteLocalRef(env, context_class);
-    (*env)->DeleteLocalRef(env, files_dir);
-    (*env)->DeleteLocalRef(env, file_class);
+    (*env)->DeleteLocalRef(env, activity_class);
+    (*env)->DeleteLocalRef(env, app_info);
+    (*env)->DeleteLocalRef(env, app_info_class);
 
-    return path;
+    return native_lib_dir;
 }

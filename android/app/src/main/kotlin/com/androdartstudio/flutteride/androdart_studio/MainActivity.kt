@@ -13,13 +13,13 @@ class MainActivity : FlutterActivity() {
     private val CHANNEL_PTY_OUTPUT = "com.androdartstudio.flutteride.androdart_studio/pty_output"
     private val CHANNEL_PTY_EXIT = "com.androdartstudio.flutteride.androdart_studio/pty_exit"
 
-    private var currentPtySession: Int = 0
+    private var currentPtySession: Long = 0
     private var ptyOutputChannel: MethodChannel? = null
     private var ptyExitChannel: MethodChannel? = null
 
     interface PtyCallback {
-        fun onOutput(sessionId: Int, data: String)
-        fun onExit(sessionId: Int, code: Int)
+        fun onOutput(sessionId: Long, data: String)
+        fun onExit(sessionId: Long, code: Int)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -47,7 +47,7 @@ class MainActivity : FlutterActivity() {
 
                     val sessionId = nativeCreatePty(
                         object : PtyCallback {
-                            override fun onOutput(sessionId: Int, data: String) {
+                            override fun onOutput(sessionId: Long, data: String) {
                                 runOnUiThread {
                                     ptyOutputChannel?.invokeMethod("onOutput", mapOf(
                                         "sessionId" to sessionId,
@@ -55,7 +55,7 @@ class MainActivity : FlutterActivity() {
                                     ))
                                 }
                             }
-                            override fun onExit(sessionId: Int, code: Int) {
+                            override fun onExit(sessionId: Long, code: Int) {
                                 runOnUiThread {
                                     ptyExitChannel?.invokeMethod("onExit", mapOf(
                                         "sessionId" to sessionId,
@@ -73,20 +73,20 @@ class MainActivity : FlutterActivity() {
                     result.success(sessionId)
                 }
                 "write" -> {
-                    val sessionId = call.argument<Int>("sessionId") ?: currentPtySession
+                    val sessionId = call.argument<Long>("sessionId") ?: currentPtySession
                     val input = call.argument<String>("input") ?: ""
                     val written = nativeWritePty(sessionId, input)
                     result.success(written)
                 }
                 "resize" -> {
-                    val sessionId = call.argument<Int>("sessionId") ?: currentPtySession
+                    val sessionId = call.argument<Long>("sessionId") ?: currentPtySession
                     val cols = call.argument<Int>("cols") ?: 80
                     val rows = call.argument<Int>("rows") ?: 24
                     nativeResizePty(sessionId, cols, rows)
                     result.success(null)
                 }
                 "close" -> {
-                    val sessionId = call.argument<Int>("sessionId") ?: currentPtySession
+                    val sessionId = call.argument<Long>("sessionId") ?: currentPtySession
                     nativeClosePty(sessionId)
                     result.success(null)
                 }
@@ -103,16 +103,16 @@ class MainActivity : FlutterActivity() {
     }
 
     private external fun nativeCreatePty(
-        callback: Any,
+        callback: PtyCallback,
         command: String,
         args: Array<String>,
         envVars: Array<String>,
         workingDir: String
-    ): Int
+    ): Long
 
-    private external fun nativeWritePty(sessionPtr: Int, input: String): Int
-    private external fun nativeResizePty(sessionPtr: Int, cols: Int, rows: Int): Int
-    private external fun nativeClosePty(sessionPtr: Int): Int
+    private external fun nativeWritePty(sessionPtr: Long, input: String): Int
+    private external fun nativeResizePty(sessionPtr: Long, cols: Int, rows: Int): Int
+    private external fun nativeClosePty(sessionPtr: Long): Int
     private external fun nativeGetNativeLibDir(): String
 
     companion object {

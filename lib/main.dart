@@ -371,6 +371,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void _newTerminalSession() {
     final session = TerminalSession(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
+      proot: widget.services.proot,
       ptyChannel: const MethodChannel(
         'com.androdartstudio.flutteride.androdart_studio/pty',
       ),

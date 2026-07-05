@@ -41,7 +41,6 @@ class ProotService {
 
     onProgress?.call(0.0, 'Downloading Debian rootfs...');
 
-    // Download rootfs tar.gz
     final client = http.Client();
     final request = http.Request('GET', Uri.parse(_rootfsUrl));
     final response = await client.send(request);
@@ -69,7 +68,6 @@ class ProotService {
 
     onProgress?.call(0.7, 'Extracting rootfs...');
 
-    // Decode and extract tar.gz
     final archive = GZipDecoder().decodeBytes(Uint8List.fromList(bytes));
     final tarArchive = TarDecoder().decodeBytes(archive);
 
@@ -101,7 +99,6 @@ class ProotService {
 
     onProgress?.call(0.9, 'Creating directories...');
 
-    // Create required directories
     final dirs = [
       '$rootfsDir/tmp',
       '$rootfsDir/root',
@@ -118,7 +115,6 @@ class ProotService {
       }
     }
 
-    // Create basic files
     final hostsFile = File('$rootfsDir/etc/hosts');
     if (!hostsFile.existsSync()) {
       await hostsFile.writeAsString('127.0.0.1 localhost\n');
@@ -148,7 +144,6 @@ class ProotService {
       '--kernel-release=5.4.0',
     ];
 
-    // Bind mount virtual filesystems
     prootArgs.addAll(['-b', '/dev']);
     prootArgs.addAll(['-b', '/proc']);
     prootArgs.addAll(['-b', '/sys']);
@@ -157,21 +152,18 @@ class ProotService {
     prootArgs.addAll(['-b', '/proc/self/fd/0:/dev/stdin']);
     prootArgs.addAll(['-b', '/proc/self/fd/1:/dev/stdout']);
     prootArgs.addAll(['-b', '/proc/self/fd/2:/dev/stderr']);
+    prootArgs.addAll(['-b', '/storage:/storage']);
 
-    // Set PROOT_TMP_DIR
     prootArgs.addAll(['-E', 'PROOT_TMP_DIR=$_filesDir/tmp']);
 
-    // Set environment variables
     env.forEach((key, value) {
       prootArgs.addAll(['-E', '$key=$value']);
     });
 
-    // Set working directory
     if (workingDir != null) {
       prootArgs.addAll(['-w', workingDir]);
     }
 
-    // The command to run inside proot
     prootArgs.add('/bin/sh');
     prootArgs.addAll(['-c', command]);
 

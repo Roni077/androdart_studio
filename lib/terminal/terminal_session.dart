@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
+import '../core/proot_service.dart';
 import '../core/session_manager.dart';
 
 class TerminalSession {
   final String id;
+  final ProotService _proot;
   final MethodChannel _ptyChannel;
   final SessionManager _sessions = SessionManager();
   int? _sessionId;
@@ -18,10 +20,12 @@ class TerminalSession {
 
   TerminalSession({
     required this.id,
+    required ProotService proot,
     required MethodChannel ptyChannel,
     required MethodChannel outputChannel,
     required MethodChannel exitChannel,
-  }) : _ptyChannel = ptyChannel {
+  })  : _proot = proot,
+        _ptyChannel = ptyChannel {
     _sessions.initialize(outputChannel, exitChannel);
   }
 
@@ -59,11 +63,17 @@ class TerminalSession {
     };
     final mergedEnv = {...defaultEnv, ...env};
 
+    final prootCmd = _proot.buildProotCommand(
+      command: 'exec /bin/sh --login',
+      env: mergedEnv,
+      workingDir: workingDir ?? _proot.rootfsHome,
+    );
+
     final result = await _ptyChannel.invokeMethod('create', {
-      'command': '/bin/bash',
-      'args': ['--login'],
+      'command': prootCmd.first,
+      'args': prootCmd.sublist(1),
       'envVars': mergedEnv.entries.expand((e) => [e.key, e.value]).toList(),
-      'workingDir': workingDir ?? '/root',
+      'workingDir': workingDir ?? _proot.rootfsHome,
     });
 
     _sessionId = result as int;

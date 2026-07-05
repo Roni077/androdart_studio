@@ -11,6 +11,7 @@ class SdkManager {
   }) : _proot = proot;
 
   String get _rootfsHome => _proot.rootfsHome;
+  String get _rootfsDir => _proot.rootfsDir;
   String get _jdkDir => '$_rootfsHome/jdk';
   String get _flutterDir => '$_rootfsHome/flutter';
   String get _androidSdkDir => '$_rootfsHome/android-sdk';
@@ -43,10 +44,8 @@ class SdkManager {
   }
 
   Future<bool> isGitInstalled() async {
-    final gitBin = File('$_rootfsHome/usr/bin/git');
-    if (gitBin.existsSync()) return true;
-    final gitBin2 = File('$_rootfsHome/usr/bin/git');
-    return gitBin2.existsSync();
+    final gitBin = File('$_rootfsDir/usr/bin/git');
+    return gitBin.existsSync();
   }
 
   Future<Map<String, bool>> verifyAll() async {
